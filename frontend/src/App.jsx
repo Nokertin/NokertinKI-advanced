@@ -1,46 +1,26 @@
-import React, { useState } from 'react';
-import './App.css';
+import React, {useEffect, useState} from 'react'
+import ChatApp from './components/ChatApp'
+import Login from './components/Login'
 
-const API_URL = '/api/chat';
+export default function App(){
+  const [user, setUser] = useState(null)
+  useEffect(()=>{
+    const email = localStorage.getItem('aichat_user_email')
+    const logged = localStorage.getItem('aichat_logged_in') === '1'
+    if(logged && email) setUser({email})
+  },[])
 
-function App() {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
+  function handleLogin(email){
+    localStorage.setItem('aichat_logged_in','1')
+    localStorage.setItem('aichat_user_email', email)
+    setUser({email})
+  }
 
-  const sendMessage = async () => {
-    if (!input) return;
-    const newMessages = [...messages, { role: 'user', content: input }];
-    setMessages(newMessages);
-    setInput('');
+  function handleLogout(){
+    localStorage.removeItem('aichat_logged_in')
+    localStorage.removeItem('aichat_user_email')
+    setUser(null)
+  }
 
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: newMessages })
-    });
-    const data = await res.json();
-    setMessages([...newMessages, { role: 'assistant', content: data.reply }]);
-  };
-
-  return (
-    <div style={{ backgroundColor: '#1e1e1e', color: '#eee', minHeight: '100vh', padding: '2rem' }}>
-      <h1>AI Chat</h1>
-      <div style={{ marginBottom: '1rem' }}>
-        {messages.map((m, i) => (
-          <div key={i} style={{ margin: '0.5rem 0' }}>
-            <b>{m.role}:</b> {m.content}
-          </div>
-        ))}
-      </div>
-      <input
-        style={{ width: '80%', padding: '0.5rem', marginRight: '0.5rem', borderRadius: '0.25rem' }}
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && sendMessage()}
-      />
-      <button onClick={sendMessage} style={{ padding: '0.5rem 1rem', borderRadius: '0.25rem' }}>Send</button>
-    </div>
-  );
+  return user ? <ChatApp user={user} onLogout={handleLogout} /> : <Login onLogin={handleLogin} />
 }
-
-export default App;
