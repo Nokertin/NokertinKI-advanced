@@ -1,7 +1,11 @@
-# AI Chat Fullstack for Render
+# Frontend (Vite + React + Tailwind)
 
-- Backend: Node + Express + Gemini Gemma 27B
-- Frontend: React + Vite
-- Для деплоя на Render:
-  - Backend: Web Service, Root Directory = backend, Start Command = npm start
-  - Frontend: Static Site, Root Directory = frontend, Build Command = npm install && npm run build, Publish Directory = dist
+Install dependencies and run dev server:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The app expects an API backend at `/api/chat`. For local development, run the provided backend server (see ../backend). The frontend proxies calls to `/api/chat` on the same origin if you run it behind the backend or use a dev proxy.
