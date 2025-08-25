@@ -2,8 +2,8 @@ import express from "express";
 import cors from "cors";
 import session from "express-session";
 import bodyParser from "body-parser";
-// import fetch from "node-fetch"; // Удалено, не используется
 import dotenv from "dotenv";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
@@ -13,22 +13,25 @@ const PORT = process.env.PORT || 3000;
 // URL фронтенда
 const FRONTEND_URL = "https://nokertinki-advanced-1.onrender.com";
 
+// Инициализация клиента Google AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 // Middleware
 app.use(cors({
   origin: FRONTEND_URL,
-  credentials: true // Разрешаем куки между фронтом и бэком
+  credentials: true
 }));
 
 app.use(bodyParser.json());
 
 app.use(session({
-  secret: "supersecretkey", // Лучше вынести в .env
+  secret: process.env.SESSION_SECRET || "supersecretkey",
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true,         // Render работает по HTTPS → обязательно
-    sameSite: "none",     // Нужно для междоменных cookie
-    maxAge: 1000 * 60 * 60 * 12 // 12 часов
+    secure: true,
+    sameSite: "none",
+    maxAge: 1000 * 60 * 60 * 12
   }
 }));
 
@@ -52,7 +55,7 @@ app.get("/api/check-auth", (req, res) => {
   res.json({ authenticated: false });
 });
 
-// Чат с ИИ
+// Чат с ИИ (Gemma 3 12B)
 app.post("/api/chat", async (req, res) => {
   if (!req.session.user) {
     return res.status(401).json({ error: "Не авторизован" });
@@ -61,8 +64,11 @@ app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
 
   try {
-    // Здесь можно подключить реальную ИИ-модель
-    const reply = `Эхо-ответ ${req.body.message}`;
+    const model = genAI.getGenerativeModel({ model: "gemma-3-12b-it" });
+
+    const result = await model.generateContent(message);
+    const reply = result.response.text();
+
     res.json({ reply });
   } catch (error) {
     console.error("Ошибка чата:", error);
@@ -70,7 +76,7 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// Выход из аккаунта
+// Выход
 app.post("/api/logout", (req, res) => {
   req.session.destroy(() => {
     res.clearCookie("connect.sid");
