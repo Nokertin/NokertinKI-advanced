@@ -1,3 +1,14 @@
+const API_URL = window.location.hostname.includes("localhost")
+  ? "http://localhost:5000"
+  : "https://nokertinki-advanced1.onrender.com";
+
+const API_URL = (
+  import.meta?.env?.VITE_API_URL ||
+  window?.__APP_ENV__?.VITE_API_URL ||
+  window?.location?.origin?.replace(/\/$/, '') ||
+  'http://localhost:3000'
+);
+
 import React, {useEffect, useState, useRef} from 'react'
 
 function uid(){ return 'id-'+Math.random().toString(36).slice(2,9) }
@@ -57,7 +68,7 @@ export default function ChatApp({user, onLogout}){
     try{
       const conv = convos.find(c=> c.id===activeId) || {messages:[]}
       const messagesForApi = [ ...conv.messages, userMsg ].map(m=> ({role:m.role, content: m.content}) )
-      const res = await fetch(`${API_URL}/api/chat`, {
+      const res = await fetch('/api/chat', {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({ messages: messagesForApi })
