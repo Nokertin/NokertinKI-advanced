@@ -1,66 +1,84 @@
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
 import session from "express-session";
+import bodyParser from "body-parser";
+import fetch from "node-fetch";
 import dotenv from "dotenv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
+// URL фронтенда
+const FRONTEND_URL = "https://nokertinki-advanced-1.onrender.com";
+
+// Middleware
 app.use(cors({
-  origin: true,
-  credentials: true
+  origin: FRONTEND_URL,
+  credentials: true // Разрешаем куки между доменами
 }));
+
 app.use(bodyParser.json());
+
 app.use(session({
-  secret: "supersecretkey",
+  secret: "supersecretkey", // Лучше вынести в .env
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false }
+  cookie: {
+    secure: true,         // Render использует HTTPS
+    sameSite: "none",     // Нужно для междоменных cookie
+    maxAge: 1000 * 60 * 60 * 12 // 12 часов
+  }
 }));
-
-const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Авторизация
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
+
   if (username === "admin" && password === "admin") {
-    req.session.user = "admin";
+    req.session.user = { username };
     return res.json({ success: true });
   }
-  res.status(401).json({ success: false, message: "Неверный логин или пароль" });
+
+  res.status(401).json({ error: "Неверный логин или пароль" });
 });
 
-// Middleware проверки авторизации
-function requireAuth(req, res, next) {
-  if (req.session.user === "admin") return next();
-  return res.status(401).json({ error: "Не авторизован" });
-}
+// Проверка авторизации
+app.get("/api/check-auth", (req, res) => {
+  if (req.session.user) {
+    return res.json({ authenticated: true });
+  }
+  res.json({ authenticated: false });
+});
 
-// Обработка чата
-app.post("/api/chat", requireAuth, async (req, res) => {
+// Чат с ИИ
+app.post("/api/chat", async (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: "Не авторизован" });
+  }
+
+  const { message } = req.body;
+
   try {
-    const { message } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
-    }
-
-    const model = client.getGenerativeModel({ model: "gemma-3-12b-it" });
-
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: message }] }]
-    });
-
-    res.json({ reply: result.response.text() });
+    // Здесь можно подключить свою ИИ-модель или API
+    const reply = Эхо-ответ: ${message};
+    res.json({ reply });
   } catch (error) {
-    console.error("Gemma API error:", error);
-    res.status(500).json({ error: error.message || "Internal server error" });
+    console.error("Ошибка чата:", error);
+    res.status(500).json({ error: "Ошибка на сервере" });
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+// Выход из аккаунта
+app.post("/api/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie("connect.sid");
+    res.json({ success: true });
+  });
+});
+
+// Старт сервера
+app.listen(PORT, () => {
+  console.log(`✅ Сервер запущен: http://localhost:${PORT}`);
 });
