@@ -16,7 +16,7 @@ const FRONTEND_URL = "https://nokertinki-advanced-1.onrender.com";
 // Middleware
 app.use(cors({
   origin: FRONTEND_URL,
-  credentials: true // Разрешаем куки между доменами
+  credentials: true // Разрешаем куки между фронтом и бэком
 }));
 
 app.use(bodyParser.json());
@@ -26,7 +26,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true,         // Render использует HTTPS
+    secure: true,         // Render работает по HTTPS → обязательно
     sameSite: "none",     // Нужно для междоменных cookie
     maxAge: 1000 * 60 * 60 * 12 // 12 часов
   }
@@ -61,7 +61,7 @@ app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
 
   try {
-    // Здесь можно подключить свою ИИ-модель или API
+    // Здесь можно подключить реальную ИИ-модель
     const reply = Эхо-ответ: ${message};
     res.json({ reply });
   } catch (error) {
