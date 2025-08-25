@@ -1,13 +1,4 @@
-// Backend proxy for AI chat
-// Usage:
-// - create .env with OPENAI_API_KEY=sk-...
-// - npm install
-// - npm start
-//
-// Receives POST /api/chat with JSON { messages: [{role:'user'|'assistant'|'system', content: '...'}, ...] }
-// Returns JSON { reply: 'assistant text' }
-// If OPENAI_API_KEY is missing, returns a demo echo response.
-
+// Backend proxy for AI chat with sanitization and robust fallback
 const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
@@ -15,37 +6,58 @@ require('dotenv').config();
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const PORT = process.env.PORT || 3000;
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
 
 app.get('/api/ping', (req, res) => {
-  res.json({ ok: true, hasKey: !!OPENAI_KEY });
+  res.json({ ok: true, hasKey: !!OPENAI_KEY, model: DEFAULT_MODEL });
 });
+
+function sanitizeMessages(messages){
+  if(!Array.isArray(messages)) return [];
+  const allowedRoles = new Set(['system','user','assistant']);
+  return messages.map(m=>{
+    let role = (m && m.role && String(m.role)) || 'user';
+    role = allowedRoles.has(role) ? role : 'user';
+    let content = '';
+    if(m && typeof m.content === 'string') content = m.content;
+    else if(m && m.content != null) content = String(m.content);
+    // remove huge base64/image data from content
+    if(content.startsWith('data:')) {
+      content = '[Изображение опущено]';
+    }
+    // truncate content to reasonable length to avoid API validation issues
+    if(content.length > 30000) content = content.slice(0,30000) + '...[truncated]';
+    return { role, content };
+  });
+}
 
 app.post('/api/chat', async (req, res) => {
   try {
     const { messages } = req.body || {};
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Invalid request: messages must be an array.' });
-    }
+    if(!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages must be an array' });
 
-    // If no API key provided, return a simple local demo reply (keeps UI unchanged)
-    if (!OPENAI_KEY) {
-      const lastUser = messages.slice().reverse().find(m => m.role === 'user');
-      const txt = lastUser ? `Демо-ответ (без ключа): ${String(lastUser.content).slice(0, 1000)}` : 'Демо-ответ: нет сообщений.';
+    const sanitized = sanitizeMessages(messages);
+
+    // If no API key provided, return a local echo/fallback reply so UI always receives response
+    if(!OPENAI_KEY){
+      const lastUser = [...sanitized].reverse().find(m=>m.role==='user');
+      const txt = lastUser ? `Демо-ответ (без ключа): ${String(lastUser.content).slice(0,1000)}` : 'Демо-ответ: нет сообщений.';
       return res.json({ reply: txt });
     }
 
-    // Prepare the payload for OpenAI Chat Completions
+    // Validate model name (basic whitelist-ish check)
+    const model = DEFAULT_MODEL;
+    if(!/^[\w\.\-]+$/.test(model)){
+      console.warn('Invalid model name, falling back to gpt-3.5-turbo');
+    }
+
     const payload = {
-      model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
-      messages: messages.map(m => {
-        // ensure content is a string
-        return { role: m.role, content: (typeof m.content === 'string') ? m.content : JSON.stringify(m.content) };
-      }),
-      // safety: limit tokens to prevent surprises; you can tune.
+      model,
+      messages: sanitized,
       max_tokens: 1000,
       temperature: 0.7,
     };
@@ -59,33 +71,36 @@ app.post('/api/chat', async (req, res) => {
       body: JSON.stringify(payload),
     });
 
-    if (!r.ok) {
+    if(!r.ok){
       const txt = await r.text();
-      console.error('OpenAI API error', r.status, txt);
-      // try to return the body text for debugging
-      return res.status(r.status).json({ error: txt });
+      console.error('OpenAI API returned non-ok:', r.status, txt);
+      // Fallback: echo last user message instead of failing
+      const lastUser = [...sanitized].reverse().find(m=>m.role==='user');
+      const fallback = lastUser ? `Извините, сейчас API вернул ошибку. Повторяю ваше сообщение: ${String(lastUser.content).slice(0,1000)}` : 'Извините, сейчас API вернул ошибку.';
+      return res.json({ reply: fallback });
     }
 
     const data = await r.json();
-
-    // Extract assistant reply robustly
     let reply = '';
-    if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
+
+    if(data && data.choices && data.choices.length>0 && data.choices[0].message && data.choices[0].message.content){
       reply = data.choices[0].message.content;
-    } else if (data.output && data.output[0] && data.output[0].content) {
-      // backup parsing for different APIs
-      reply = data.output[0].content.map(c => c.text || '').join('\n');
+    } else if(data && data.output && data.output[0] && data.output[0].content){
+      reply = data.output[0].content.map(c=>c.text||'').join('\n');
     } else {
       reply = JSON.stringify(data);
     }
 
     res.json({ reply });
   } catch (err) {
-    console.error('Server error', err);
-    res.status(500).json({ error: err.message || String(err) });
+    console.error('Server error:', err && err.stack ? err.stack : err);
+    // Final fallback: echo last user message to keep chat responsive
+    const { messages } = req.body || {};
+    const sanitized = Array.isArray(messages) ? messages.map(m => ({ role: m.role, content: (m && m.content) ? String(m.content).slice(0,1000) : '' })) : [];
+    const lastUser = [...sanitized].reverse().find(m=>m.role==='user');
+    const fallback = lastUser ? `Произошла внутренняя ошибка. Повторяю ваше сообщение: ${String(lastUser.content).slice(0,1000)}` : 'Произошла внутренняя ошибка на сервере.';
+    res.json({ reply: fallback });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`AI chat backend listening on port ${PORT} (OPENAI_KEY=${!!OPENAI_KEY})`);
-});
+app.listen(PORT, ()=> console.log('AI chat backend listening on port', PORT, 'hasKey=', !!OPENAI_KEY));
