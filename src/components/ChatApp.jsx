@@ -1,3 +1,7 @@
+const API_URL = window.location.hostname.includes("localhost")
+  ? "http://localhost:5000"
+  : "https://nokertinki-advanced1.onrender.com";
+
 const API_URL = (
   import.meta?.env?.VITE_API_URL ||
   window?.__APP_ENV__?.VITE_API_URL ||
