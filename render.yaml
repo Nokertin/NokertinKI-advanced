@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: nokertinki-backend
+    name: nokertin-backend
     env: node
     rootDir: backend
     buildCommand: npm install
@@ -10,7 +10,10 @@ services:
         sync: false
 
   - type: static_site
-    name: nokertinki-frontend
-    rootDir: .
+    name: nokertin-frontend
+    rootDir: frontend
     buildCommand: npm install && npm run build
     publishDir: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://nokertin-backend.onrender.com
