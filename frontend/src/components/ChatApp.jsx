@@ -57,7 +57,7 @@ export default function ChatApp({user, onLogout}){
     try{
       const conv = convos.find(c=> c.id===activeId) || {messages:[]}
       const messagesForApi = [ ...conv.messages, userMsg ].map(m=> ({role:m.role, content: m.content}) )
-      const res = await fetch('/api/chat', {
+      const res = await fetch(`${API_URL}/api/chat`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({ messages: messagesForApi })

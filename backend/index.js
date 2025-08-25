@@ -11,8 +11,10 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: '*'}));
 app.use(express.json({ limit: '8mb' }));
+
+app.get('/health', (req,res)=>res.json({status:'ok'}));
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
