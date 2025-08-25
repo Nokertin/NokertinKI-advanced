@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import session from "express-session";
 import bodyParser from "body-parser";
-import fetch from "node-fetch";
+// import fetch from "node-fetch"; // Удалено, не используется
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -62,7 +62,7 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     // Здесь можно подключить реальную ИИ-модель
-    const reply = Эхо-ответ: ${message};
+    const reply = `Эхо-ответ ${req.body.message}`;
     res.json({ reply });
   } catch (error) {
     console.error("Ошибка чата:", error);
