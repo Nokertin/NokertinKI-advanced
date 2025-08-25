@@ -1,3 +1,10 @@
+const API_URL = (
+  import.meta?.env?.VITE_API_URL ||
+  window?.__APP_ENV__?.VITE_API_URL ||
+  window?.location?.origin?.replace(/\/$/, '') ||
+  'http://localhost:3000'
+);
+
 import React, {useEffect, useState, useRef} from 'react'
 
 function uid(){ return 'id-'+Math.random().toString(36).slice(2,9) }
