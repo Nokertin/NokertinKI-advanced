@@ -14,6 +14,3 @@ services:
     rootDir: .
     buildCommand: npm install && npm run build
     publishDir: dist
-    envVars:
-      - key: VITE_API_URL
-        value: https://nokertinki-advanced1.onrender.com
