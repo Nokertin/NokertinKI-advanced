@@ -2,6 +2,11 @@ import React, {useEffect, useState, useRef} from 'react'
 
 function uid(){ return 'id-'+Math.random().toString(36).slice(2,9) }
 
+const API_URL = (
+  (typeof import !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_API_URL) ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5000' : '')
+).replace(/\/$/, '') || '';
+
 export default function ChatApp({user, onLogout}){
   const [convos, setConvos] = useState([]) // {id, title, messages:[{role,content,attachments}]}
   const [activeId, setActiveId] = useState(null)
@@ -57,12 +62,17 @@ export default function ChatApp({user, onLogout}){
     try{
       const conv = convos.find(c=> c.id===activeId) || {messages:[]}
       const messagesForApi = [ ...conv.messages, userMsg ].map(m=> ({role:m.role, content: m.content}) )
-      const res = await fetch('/api/chat', {
+      const res = await fetch(`${API_URL}/api/chat`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({ messages: messagesForApi })
       })
-      const data = await res.json()
+      const contentType = res.headers.get('content-type') || ''
+      if(!res.ok){
+        const errText = contentType.includes('application/json') ? JSON.stringify(await res.json()) : await res.text()
+        throw new Error(`HTTP ${res.status}: ${errText.slice(0,200)}`)
+      }
+      const data = contentType.includes('application/json') ? await res.json() : { reply: await res.text() }
       const botText = data?.reply || 'Ошибка: нет ответа.'
       const botMsg = { role:'assistant', content: botText, attachments: [] }
       appendMessageToActive(botMsg)

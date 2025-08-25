@@ -1,55 +1,80 @@
 import express from "express";
-import fetch from "node-fetch";
 import cors from "cors";
-import dotenv from "dotenv";
+import bodyParser from "body-parser";
+import session from "express-session";
+import { GoogleGenerativeAI } from "@google/genai";
 
-dotenv.config();
 const app = express();
-app.use(express.json());
-app.use(cors());
+const port = process.env.PORT || 5000;
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = "gemma-3-27b";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+// CORS с поддержкой сессий
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+app.use(bodyParser.json());
 
-app.post("/chat", async (req, res) => {
+// Сессии
+app.use(session({
+  secret: "supersecretkey",
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false } // можно true при https
+}));
+
+const client = new GoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
+// --- Авторизация ---
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === "admin" && password === "admin") {
+    req.session.user = "admin";
+    return res.json({ success: true });
+  }
+
+  res.status(401).json({ success: false, message: "Неверный логин или пароль" });
+});
+
+// --- Проверка авторизации ---
+function requireAuth(req, res, next) {
+  if (req.session.user === "admin") return next();
+  return res.status(401).json({ error: "Не авторизован" });
+}
+
+// --- Чат только для авторизованных ---
+app.post("/api/chat", requireAuth, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, messages } = req.body;
 
-    if (!message) {
+    let text = message;
+    if (!text && Array.isArray(messages) && messages.length) {
+      text = messages.map(m => `${m.role}: ${m.content}`).join("\n");
+    }
+
+    if (!text) {
       return res.status(400).json({ error: "Message is required" });
     }
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
-    }
 
-    const response = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: message }],
-          },
-        ],
-      }),
+    const model = client.getGenerativeModel({ model: "gemma-3-12b-it" });
+
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text }] }],
     });
 
-    const data = await response.json();
+    const reply = result.response.text();
+    res.json({ reply });
 
-    if (!response.ok) {
-      console.error("Gemini API error:", data);
-      return res.status(response.status).json(data);
-    }
-
-    const aiMessage = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Ошибка: пустой ответ от Gemini API";
-
-    res.json({ reply: aiMessage });
   } catch (error) {
-    console.error("Server error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Gemma API error:", error);
+    res.status(500).json({
+      error: error.message || "Internal server error",
+    });
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
+});
